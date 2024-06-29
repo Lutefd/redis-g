@@ -11,10 +11,9 @@ import (
 
 const (
 	CommandSET = "SET"
- )
+)
 
 type Command interface {
-
 }
 
 type SetCommand struct {
@@ -35,13 +34,13 @@ func parseCommand(msg string) (Command, error) {
 			for _, val := range v.Array() {
 				switch val.String() {
 				case CommandSET:
-						if len(v.Array()) != 3 {
-							return nil, fmt.Errorf("invalid number of variables for SET 	command")
-						}
-						cmd := SetCommand{
-							key: v.Array()[1].String(),
-							val: v.Array()[2].String(),
-						}
+					if len(v.Array()) != 3 {
+						return nil, fmt.Errorf("invalid number of variables for SET 	command")
+					}
+					cmd := SetCommand{
+						key: v.Array()[1].String(),
+						val: v.Array()[2].String(),
+					}
 					return cmd, nil
 				}
 			}
