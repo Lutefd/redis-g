@@ -16,13 +16,17 @@ const defaultListenAddr = ":5001"
 type Config struct {
 	ListenAddr string
 }
+type Message struct {
+	data []byte
+	peer *Peer
+}
 type Server struct {
 	Config
 	ln        net.Listener
 	peers     map[*Peer]bool
 	addPeerCh chan *Peer
 	quitCh    chan struct{}
-	msgCh     chan []byte
+	msgCh     chan Message
 	kv        *KV
 }
 
@@ -35,7 +39,7 @@ func NewServer(cfg Config) *Server {
 		peers:     make(map[*Peer]bool),
 		addPeerCh: make(chan *Peer),
 		quitCh:    make(chan struct{}),
-		msgCh:     make(chan []byte),
+		msgCh:     make(chan Message),
 		kv:        NewKV(),
 	}
 }
@@ -52,24 +56,33 @@ func (s *Server) Start() error {
 	return s.acceptLoop()
 }
 
-func (s *Server) handleRawMessage(rawMsg []byte) error {
-	cmd, err := parseCommand(string(rawMsg))
+func (s *Server) handleMessage(msg Message) error {
+	cmd, err := parseCommand(string(msg.data))
 	if err != nil {
 		return err
 	}
 	switch v := cmd.(type) {
 	case SetCommand:
-		slog.Info("somebody  wants to set a key into the hash table", "key", v.key, "value", v.val)
 		return s.kv.Set(v.key, v.val)
+	case GetCommand:
+		val, ok := s.kv.Get(v.key)
+		if !ok {
+			return fmt.Errorf("key not found")
+		}
+		_, err := msg.peer.Send(val)
+		if err != nil {
+			return fmt.Errorf("peer send error, err: %s ", err)
+		}
 	}
+
 	return nil
 }
 
 func (s *Server) loop() {
 	for {
 		select {
-		case rawMsg := <-s.msgCh:
-			if err := s.handleRawMessage(rawMsg); err != nil {
+		case msg := <-s.msgCh:
+			if err := s.handleMessage(msg); err != nil {
 				slog.Error("raw message decoding error", "err", err)
 
 			}
@@ -95,8 +108,6 @@ func (s *Server) acceptLoop() error {
 func (s *Server) handleConn(conn net.Conn) {
 	peer := NewPeer(conn, s.msgCh)
 	s.addPeerCh <- peer
-	//block bc of errs
-	slog.Info("new peer connected", "remoteAddr", conn.RemoteAddr())
 	if err := peer.readLoop(); err != nil {
 		slog.Error("peer read error", "err", err, "remoteAddr", conn.RemoteAddr())
 	}
@@ -113,8 +124,10 @@ func main() {
 		if err := c.Set(context.TODO(), fmt.Sprintf("foo %d", i), fmt.Sprintf("bar %d", i)); err != nil {
 			log.Fatal(err)
 		} // this adding peers for no reason at all, will fix it later
+		val, err := c.Get(context.TODO(), fmt.Sprintf("foo %d", i))
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("got this back =>", val)
 	}
-	time.Sleep(time.Second)
-	fmt.Println(server.kv.data)
-	select {} //blocking so the program doesn't exit
 }
