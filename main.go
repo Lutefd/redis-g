@@ -1,14 +1,11 @@
 package main
 
 import (
-	"context"
+	"flag"
 	"fmt"
 	"log"
 	"log/slog"
 	"net"
-	"time"
-
-	"github.com/lutefd/redis-g/client"
 )
 
 const defaultListenAddr = ":5001"
@@ -111,24 +108,11 @@ func (s *Server) handleConn(conn net.Conn) {
 }
 
 func main() {
-	server := NewServer(Config{})
-	go func() {
-		log.Fatal(server.Start())
-	}()
-	time.Sleep(time.Second)
-	c, err := client.New("localhost:5001")
-	if err != nil {
-		log.Fatal(err)
-	}
-	for i := 0; i < 10; i++ {
-		fmt.Println("SET =>", fmt.Sprintf("bar %d", i))
-		if err := c.Set(context.TODO(), fmt.Sprintf("foo %d", i), fmt.Sprintf("bar %d", i)); err != nil {
-			log.Fatal(err)
-		}
-		val, err := c.Get(context.TODO(), fmt.Sprintf("foo %d", i))
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println("GET =>", val)
-	}
+	listenAddr := flag.String("listenAddr", defaultListenAddr, "listen address of the server")
+	flag.Parse()
+	server := NewServer(Config{
+		ListenAddr: *listenAddr,
+	})
+	log.Fatal(server.Start())
+
 }
