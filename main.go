@@ -17,7 +17,7 @@ type Config struct {
 	ListenAddr string
 }
 type Message struct {
-	data []byte
+	cmd  Command
 	peer *Peer
 }
 type Server struct {
@@ -57,11 +57,8 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) handleMessage(msg Message) error {
-	cmd, err := parseCommand(string(msg.data))
-	if err != nil {
-		return err
-	}
-	switch v := cmd.(type) {
+
+	switch v := msg.cmd.(type) {
 	case SetCommand:
 		return s.kv.Set(v.key, v.val)
 	case GetCommand:
@@ -119,15 +116,19 @@ func main() {
 		log.Fatal(server.Start())
 	}()
 	time.Sleep(time.Second)
-	c := client.New("localhost:5001")
+	c, err := client.New("localhost:5001")
+	if err != nil {
+		log.Fatal(err)
+	}
 	for i := 0; i < 10; i++ {
+		fmt.Println("SET =>", fmt.Sprintf("bar %d", i))
 		if err := c.Set(context.TODO(), fmt.Sprintf("foo %d", i), fmt.Sprintf("bar %d", i)); err != nil {
 			log.Fatal(err)
-		} // this adding peers for no reason at all, will fix it later
+		}
 		val, err := c.Get(context.TODO(), fmt.Sprintf("foo %d", i))
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Println("got this back =>", val)
+		fmt.Println("GET =>", val)
 	}
 }
